@@ -158,6 +158,18 @@ pub(super) fn render_settings_overlay(
                 choice_hits.push((rect, index));
             }
         }
+        ClientSettingsSection::Spaces => {
+            render_choice_section(
+                buffer,
+                content,
+                "spaces organization",
+                "group open workspaces by machine or shared name",
+                &["by machine", "by name"],
+                settings.selected,
+                palette,
+                &mut choice_hits,
+            );
+        }
         ClientSettingsSection::Indicators => {
             render_choice_section(
                 buffer,

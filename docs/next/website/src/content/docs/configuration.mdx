@@ -64,6 +64,17 @@ headless_rows = 50
 
 With one attached client, all tabs follow its size. With multiple clients, each viewed tab follows the client that most recently focused, selected, or interacted with it. When all but one client detach, all tabs immediately return to the remaining client's size. When no clients remain, existing pane PTYs retain their last size and new headless layout uses the configured fallback.
 
+## Client idle detach
+
+Set an inactivity limit in the config where the client process runs. For `ssh home` followed by `herdr`, that is the home machine; for `herdr --remote home`, it is the machine running the command:
+
+```toml
+[ui]
+idle_detach_minutes = 30
+```
+
+Herdr detaches that client after 30 minutes without local keyboard, mouse, paste, focus, or terminal resize activity. Pane output, agent activity, and server updates do not reset the timer. The server and pane processes keep running; run `herdr` to reattach. The default value is `0`, which disables automatic detach. Reload the config in a running client to apply a new limit.
+
 ## Terminal defaults
 
 Set the executable Herdr uses for newly created interactive panes:

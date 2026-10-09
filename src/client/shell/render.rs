@@ -236,6 +236,9 @@ pub(super) struct ShellRenderState<'a> {
     pub(super) collapsed_endpoints: &'a HashSet<ClientEndpointId>,
     pub(super) collapsed_groups: &'a HashSet<String>,
     pub(super) remote_collapsed_groups: &'a HashMap<ClientEndpointId, HashSet<String>>,
+    pub(super) spaces_group_by: SpacesGroupBy,
+    pub(super) collapsed_projects: &'a HashSet<String>,
+    pub(super) collapsed_project_machines: &'a HashSet<(String, ClientEndpointId)>,
     pub(super) workspace_scroll: &'a mut usize,
     pub(super) agent_scroll: &'a mut usize,
     pub(super) tab_scroll: &'a mut usize,
@@ -268,7 +271,26 @@ pub(super) fn render_shell(
         );
     }
     if layout.sidebar.width > 0 {
-        if state.endpoints.len() > 1 {
+        if state.spaces_group_by == SpacesGroupBy::Name {
+            if state.sidebar_collapsed {
+                super::project_sidebar::render_collapsed(
+                    buffer,
+                    layout.sidebar,
+                    config,
+                    &mut state,
+                    &mut hits,
+                );
+            } else {
+                super::project_sidebar::render_expanded(
+                    buffer,
+                    layout.sidebar,
+                    Some(snapshot),
+                    config,
+                    &mut state,
+                    &mut hits,
+                );
+            }
+        } else if state.endpoints.len() > 1 {
             if state.sidebar_collapsed {
                 super::endpoint_sidebar::render_collapsed(
                     buffer,
@@ -329,6 +351,7 @@ pub(super) fn render_shell(
         hits.agent_sort_toggle = Rect::default();
         hits.new_workspace = Rect::default();
         hits.machines.clear();
+        hits.projects.clear();
         hits.workspaces.clear();
         hits.agents.clear();
         hits.endpoint_agents.clear();

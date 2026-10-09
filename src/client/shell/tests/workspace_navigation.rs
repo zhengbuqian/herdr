@@ -34,6 +34,100 @@ fn navigation_state(mut projected: ClientShellSnapshot) -> (ClientShellState, Cl
     (state, remote)
 }
 
+#[test]
+fn project_spaces_group_linked_worktrees_across_machines_and_collapse_independently() {
+    use crate::client::shell::project_spaces::{rows, workspace_order, ProjectSpaceRow};
+
+    let (mut state, remote) = state_with_remote();
+    let mut local = workspaces(3);
+    local.workspaces[0].label = "feature".into();
+    local.workspaces[1].label = "milvus".into();
+    local.workspaces[2].label = "tantivy".into();
+    for (index, linked) in [(0, true), (1, false)] {
+        local.workspaces[index].worktree = Some(ClientShellWorktree {
+            key: "milvus-repo".into(),
+            label: "milvus".into(),
+            is_linked_worktree: linked,
+        });
+    }
+    state.set_snapshot(Box::new(local));
+    let mut remote_snapshot = snapshot();
+    remote_snapshot.boot_id = "remote-boot".into();
+    remote_snapshot.workspaces[0].label = "milvus".into();
+    state.set_endpoint_snapshot(&remote, Box::new(remote_snapshot));
+
+    let grouped = rows(&state.endpoints, &HashSet::new(), &HashSet::new());
+    assert!(matches!(
+        &grouped[0],
+        ProjectSpaceRow::Project { label, count: 3, .. } if label == "milvus"
+    ));
+    assert_eq!(workspace_order(&grouped), [(0, 1), (0, 0), (1, 0), (0, 2)]);
+
+    let collapsed_machine = HashSet::from([("milvus".to_owned(), remote)]);
+    assert_eq!(
+        workspace_order(&rows(&state.endpoints, &HashSet::new(), &collapsed_machine)),
+        [(0, 1), (0, 0), (0, 2)]
+    );
+    assert_eq!(
+        workspace_order(&rows(
+            &state.endpoints,
+            &HashSet::from(["milvus".to_owned()]),
+            &HashSet::new(),
+        )),
+        [(0, 2)]
+    );
+}
+
+#[test]
+fn project_spaces_use_repository_name_without_an_open_root_workspace() {
+    let (mut state, _) = state_with_remote();
+    let mut local = snapshot();
+    local.workspaces[0].label = "feature-only".into();
+    local.workspaces[0].worktree = Some(ClientShellWorktree {
+        key: "repo-key".into(),
+        label: "milvus".into(),
+        is_linked_worktree: true,
+    });
+    state.set_snapshot(Box::new(local));
+    state.spaces_group_by = SpacesGroupBy::Name;
+    let frame = state.compose(160, 60).expect("project sidebar frame");
+    assert!(frame_rows(&frame).iter().any(|row| row.contains("milvus")));
+    assert!(state.hits.projects.iter().any(|hit| hit.key == "milvus"));
+    assert!(state.hits.machines.iter().any(|hit| {
+        hit.endpoint_id == ClientEndpointId::Local && hit.project_key.as_deref() == Some("milvus")
+    }));
+}
+
+#[test]
+fn project_spaces_keyboard_preview_keeps_remote_identity_with_duplicate_workspace_ids() {
+    let (mut state, remote) = state_with_remote();
+    let mut local = workspaces(2);
+    local.workspaces[0].label = "alpha".into();
+    local.workspaces[1].label = "beta".into();
+    state.set_snapshot(Box::new(local));
+    let mut remote_snapshot = snapshot();
+    remote_snapshot.boot_id = "remote-boot".into();
+    remote_snapshot.workspaces[0].label = "alpha".into();
+    state.set_endpoint_snapshot(&remote, Box::new(remote_snapshot));
+    state.spaces_group_by = SpacesGroupBy::Name;
+    state.navigate_workspace_id = state.focused_navigation_target();
+    state.move_navigate_workspace(1);
+
+    let selected = state
+        .navigate_workspace_id
+        .as_ref()
+        .expect("remote preview");
+    assert_eq!(selected.endpoint_id, remote);
+    assert_eq!(selected.workspace_id, "ws_1");
+    assert!(state.navigation_target_valid(selected));
+    assert!(state.workspace_preview_action_blocked());
+    assert_eq!(state.active_endpoint_id, ClientEndpointId::Local);
+    state.move_navigate_workspace(1);
+    let selected = state.navigate_workspace_id.as_ref().expect("local preview");
+    assert_eq!(selected.endpoint_id, ClientEndpointId::Local);
+    assert_eq!(selected.workspace_id, "ws_2");
+}
+
 fn preview_key(state: &mut ClientShellState, bytes: &[u8]) {
     let outcome = state.handle_input_bytes(bytes);
     assert!(outcome.actions.is_empty(), "{bytes:?}");
