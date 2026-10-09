@@ -900,6 +900,12 @@
           "description": "Terminal width at or below which Herdr uses the mobile single-column layout."
         },
         {
+          "key": "ui.idle_detach_minutes",
+          "type": "integer",
+          "default": "0",
+          "description": "Detach this client after this many minutes without local user activity. Zero disables automatic detach; pane output and agent activity do not reset the timer."
+        },
+        {
           "key": "ui.mouse_capture",
           "type": "boolean",
           "default": "true",

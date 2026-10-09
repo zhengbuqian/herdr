@@ -91,7 +91,7 @@ pub(super) fn render_collapsed(
                 }),
             );
             let mut status_badge = Rect::default();
-            if !endpoint.endpoint_id.is_local() {
+            if !endpoint.endpoint_id.is_local() && endpoint.status != ClientEndpointStatus::Online {
                 let (glyph, _, color) = endpoint_status_presentation(endpoint.status, palette);
                 let width = display_width(glyph).min(rect.width);
                 status_badge = Rect::new(rect.right().saturating_sub(width), rect.y, width, 1);
@@ -112,6 +112,7 @@ pub(super) fn render_collapsed(
                 status_badge,
                 collapse_toggle: Rect::new(rect.x, rect.y, u16::from(rect.width > 1), 1),
                 endpoint_id: endpoint.endpoint_id.clone(),
+                project_key: None,
             });
             y = y.saturating_add(1);
         }
@@ -427,6 +428,7 @@ pub(super) fn render_expanded(
                         1,
                     ),
                     endpoint_id: endpoint.endpoint_id.clone(),
+                    project_key: None,
                 });
                 y = y
                     .saturating_add(1)
@@ -579,7 +581,7 @@ pub(super) fn render_expanded(
     );
 }
 
-fn active_endpoint_label<'a>(state: &'a ShellRenderState<'_>) -> &'a str {
+pub(super) fn active_endpoint_label<'a>(state: &'a ShellRenderState<'_>) -> &'a str {
     state
         .endpoints
         .iter()
@@ -587,7 +589,7 @@ fn active_endpoint_label<'a>(state: &'a ShellRenderState<'_>) -> &'a str {
         .map_or("Local", |endpoint| endpoint.label.as_str())
 }
 
-fn render_endpoint_row(
+pub(super) fn render_endpoint_row(
     buffer: &mut Buffer,
     rect: Rect,
     marker: &str,
@@ -609,7 +611,7 @@ fn render_endpoint_row(
         "! auth".to_owned()
     } else if endpoint.status == ClientEndpointStatus::Attention {
         "! error".to_owned()
-    } else if endpoint.endpoint_id.is_local() {
+    } else if endpoint.endpoint_id.is_local() || endpoint.status == ClientEndpointStatus::Online {
         String::new()
     } else if state.is_empty() {
         glyph.to_owned()

@@ -699,6 +699,7 @@ fn reload_local_client_config_refreshes_local_client_presentation_state() {
     let mut draw_host_cursor = false;
     let mut remote_image_paste_key = None;
     let mut mouse_capture = true;
+    let mut idle_detach = timer::IdleDetach::new(0, std::time::Instant::now());
 
     reload_local_client_config(
         &mut sound_config,
@@ -706,6 +707,7 @@ fn reload_local_client_config_refreshes_local_client_presentation_state() {
         &mut draw_host_cursor,
         &mut remote_image_paste_key,
         &mut mouse_capture,
+        &mut idle_detach,
     );
 
     assert!(!redraw_on_focus_gained);
@@ -733,6 +735,7 @@ fn reload_local_client_config_keeps_ui_preferences_when_ui_is_invalid() {
     let mut draw_host_cursor = true;
     let mut remote_image_paste_key = None;
     let mut mouse_capture = false;
+    let mut idle_detach = timer::IdleDetach::new(30, std::time::Instant::now());
 
     reload_local_client_config(
         &mut sound_config,
@@ -740,6 +743,7 @@ fn reload_local_client_config_keeps_ui_preferences_when_ui_is_invalid() {
         &mut draw_host_cursor,
         &mut remote_image_paste_key,
         &mut mouse_capture,
+        &mut idle_detach,
     );
 
     assert!(!mouse_capture);

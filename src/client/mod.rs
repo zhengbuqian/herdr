@@ -27,6 +27,8 @@ mod frame_output;
 #[cfg(test)]
 mod frame_output_tests;
 mod handshake;
+#[cfg(unix)]
+mod home_workspaces;
 mod image_files;
 mod input;
 mod loop_config;
@@ -204,6 +206,7 @@ fn run_client_with_mode(
         pixel_geometry_enabled,
         pixel_geometry_fallback: kitty_graphics_enabled,
         mouse_capture_active: mouse_capture,
+        idle_detach_minutes: loaded_config.config.ui.idle_detach_minutes,
         host_escape_disambiguation_active: false,
         initial_host_input: Vec::new(),
         endpoint_keybindings,
@@ -649,6 +652,11 @@ async fn run_client_loop(
 
     // Main event loop.
     let mut client_timer = timer::ClientLoopTimer::new();
+    let mut idle_detach =
+        timer::IdleDetach::new(config.idle_detach_minutes, std::time::Instant::now());
+    #[cfg(unix)]
+    let mut home_workspaces =
+        home_workspaces::HomeWorkspaces::new(crate::session::active_api_socket_path());
     #[cfg(windows)]
     let mut stdin_open = true;
     while !should_quit.load(Ordering::Acquire) {
@@ -794,6 +802,12 @@ async fn run_client_loop(
             }
         };
         let now = std::time::Instant::now();
+        if idle_detach.expired(now) {
+            info!("client idle timeout reached; detaching");
+            let _ = write_to_server(&mut write_stream, &ClientMessage::Detach);
+            return Ok(());
+        }
+        idle_detach.observe_event(&event, now);
         if let Some(shell) = state.shell.as_mut() {
             shell.tick_popup_pending(now);
         }
@@ -1931,6 +1945,7 @@ async fn run_client_loop(
                     }
                     ServerMessage::ReloadSoundConfig => apply_reload(
                         &mut state,
+                        &mut idle_detach,
                         &mut write_stream,
                         &mut pending_activation,
                         &host_mouse_capture_active,
@@ -2233,6 +2248,10 @@ async fn run_client_loop(
                         .collect::<Vec<_>>();
                     let (effects, outcome, frame) = {
                         let shell = state.shell.as_mut().expect("checked shell mode");
+                        #[cfg(unix)]
+                        if !is_remote_client && state.attach_escape.is_none() {
+                            home_workspaces.tick(shell, &endpoint_catalog.ssh, now);
+                        }
                         let mut outcome = shell.tick_selection_autoscroll(now);
                         for expired in expired_endpoints {
                             if !shell.endpoint_is_active(&expired.endpoint_id) {

@@ -1,85 +1,45 @@
-# herdr
+# Herdr fork
 
+Personal client customizations for [Herdr](https://github.com/herdrdev/herdr), based on official `v0.9.3`:
 
-<p align="center">
-  <img src="assets/logo.png" alt="herdr" width="100" />
-</p>
+- Group shared projects by name across Local and SSH machines.
+- Place single-machine projects below shared projects, separated by a divider.
+- Show checkouts directly under each machine, with tree markers and the main repo's branch first.
+- Highlight the machine row belonging to the selected checkout's project.
+- Nest renamed home workspaces under `~`, always first under each machine.
+- Recreate a missing home shell while the custom client is connected.
+- Open workspace context menus directly across machines with one right-click.
+- Hide online-machine dots while keeping offline and error indicators.
+- Remember grouping and collapsed sections across client launches.
+- Detach idle clients after a configurable timeout, keeping panes and agents running.
 
-<p align="center">
-  <a href="https://herdr.dev">herdr.dev</a> · <a href="#install">install</a> · <a href="https://herdr.dev/docs/quick-start/">quick start</a> · <a href="https://herdr.dev/docs/">docs</a>
-</p>
+All customizations are client-side; the server stays official.
 
-<p align="center">
-  English · <a href="README.zh-CN.md">简体中文</a>
-</p>
+## Project-oriented Spaces
 
-<p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-666666?labelColor=333333" alt="Apache 2.0 license" /></a>
-  <a href="https://github.com/herdrdev/herdr/releases"><img src="https://img.shields.io/github/downloads/herdrdev/herdr/total?labelColor=333333&color=666666" alt="total GitHub release downloads" /></a>
-  <a href="https://github.com/herdrdev/herdr/stargazers"><img src="https://img.shields.io/github/stars/herdrdev/herdr?labelColor=333333&color=666666&logo=github" alt="GitHub stars" /></a>
-  <a href="https://github.com/herdrdev/herdr/releases/latest"><img src="https://img.shields.io/github/v/release/herdrdev/herdr?label=release&labelColor=333333&color=666666" alt="latest stable release" /></a>
-  <a href="https://formulae.brew.sh/formula/herdr"><img src="https://img.shields.io/homebrew/v/herdr?label=homebrew&labelColor=333333&color=666666" alt="Homebrew version" /></a>
-  <a href="https://x.com/herdrdev"><img src="https://img.shields.io/badge/follow-%40herdrdev-000000?logo=x&logoColor=white" alt="follow @herdrdev on X" /></a>
-</p>
+In **Settings → Spaces**, choose **By name** to group workspaces with the same name across the local machine and saved SSH machines. Projects present on multiple machines show a project heading, then each machine and its checkouts as direct sibling tree rows. The main repository is always first and shows only its branch row, followed by one row per worktree. Projects present on only one machine appear together under that machine's heading using the regular workspace/worktree layout. Home (`~`) always appears under its machine, even when other machines also have a home workspace.
 
----
+Shared projects always appear first, with a horizontal divider before the machine-organized section. Home (`~`) is the first workspace under each machine. The highlighted machine row belongs to the selected workspace's group: selecting a checkout in a shared project highlights that project's machine row.
 
-https://github.com/user-attachments/assets/043ec09f-4bdd-41d5-aee0-8fda6b83e267
+Non-project workspaces whose panes start in the home directory are grouped under that machine's `~`, including renamed workspaces. Their labels are preserved. If there is no actual `~` workspace, a client-only home heading holds them; its children can be collapsed and expanded.
 
-**the runtime your coding agents live on.**
+Each machine always has a `~` heading. While this custom client is running and connected, it recreates a missing real home shell workspace through the existing JSON API. The client embeds a one-shot Python 3 helper and uses SSH for saved remote machines; a per-user lock coordinates simultaneous clients. No server changes or resident helper are needed, and creating `~` keeps the current focus. Remote machines need Python 3. Closing all custom clients stops automatic home-workspace maintenance.
 
-- **detach without stopping work** — herdr keeps terminals running in a background server when you close the client or lose your SSH connection. after a server or machine restart, herdr restores the saved layout and can resume supported agent sessions; the original processes do not survive. [session state →](https://herdr.dev/docs/session-state/)
-- **several machines, one window** — keep local work and saved ssh machines together, with a combined agent list and independent reconnects. [remote machines →](https://herdr.dev/docs/connecting-machines/)
-- **never hunt for the stuck one** — every pane is marked working, blocked, or idle. when an agent stops and needs an answer, herdr says so.
-- **agent-native** — agents drive herdr through the cli and socket api: they can spawn panes, prompt each other, and wait until another agent is genuinely blocked. [agent skill →](https://herdr.dev/docs/agent-skill/)
-- **runs what you already run** — claude code, codex, cursor, opencode, grok and the rest. herdr doesn't wrap or replace them; it owns their terminals.
-- **keyboard and mouse, both first-class** — tmux-style prefix keys *and* click, drag, split. pick per moment, not per tool.
-- **plugins** — extend panes and workflows. [browse the marketplace →](https://herdr.dev/plugins/)
-- **one rust binary, no electron** — runs in whatever terminal you already use.
+Right-clicking a workspace on another machine selects it and opens its context menu directly. Rename, close, and worktree actions then apply to that machine's workspace.
 
----
+![Spaces grouped by project across machines](https://github.com/user-attachments/assets/762d0664-d019-4b95-ad94-9bb5eddca3b8)
 
-## install
+Grouping and collapsed sections are saved as client preferences. Workspaces and their processes stay on their original machines, and compatible remote servers need no update for this view.
 
-```bash
-curl -fsSL https://herdr.dev/install.sh | sh
+## Automatic client detach when idle
+
+Set a timeout in `config.toml` on the machine running the client process:
+
+```toml
+[ui]
+idle_detach_minutes = 30
 ```
 
-or `brew install herdr` · `mise use -g herdr` · windows: `powershell -ExecutionPolicy Bypass -c "irm https://herdr.dev/install.ps1 | iex"` · [endpoint-protected Windows](https://herdr.dev/docs/windows-beta/) · [binaries](https://github.com/herdrdev/herdr/releases)
+The client detaches after the configured period without local keyboard, mouse, paste, focus, or terminal resize activity. Agent output and server updates do not reset the timer. Detaching leaves the server, panes, and agents running; launch Herdr again to reconnect. The default is `0`, which disables automatic detach.
 
-then start it where the work lives:
-
-```bash
-herdr
-```
-
-run your agents, split panes, walk away. `ctrl+b q` detaches, `herdr` reattaches. [quick start →](https://herdr.dev/docs/quick-start/)
-
-## docs
-
-everything lives at [herdr.dev/docs](https://herdr.dev/docs/): [quick start](https://herdr.dev/docs/quick-start/) · [concepts](https://herdr.dev/docs/concepts/) · [supported agents](https://herdr.dev/docs/agents/) · [keyboard](https://herdr.dev/docs/keyboard/) · [configuration](https://herdr.dev/docs/configuration/) · [session state](https://herdr.dev/docs/session-state/) · [connecting machines](https://herdr.dev/docs/connecting-machines/) · [remote](https://herdr.dev/docs/persistence-remote/) · [integrations](https://herdr.dev/docs/integrations/) · [plugins](https://herdr.dev/docs/plugins/) · [socket api](https://herdr.dev/docs/socket-api/)
-
-## thanks
-
-every past sponsor and backer is listed in [SPONSORS.md](./SPONSORS.md) — thank you 🐑
-
-enterprise / partnership: hey@herdr.dev
-
-## agent instructions
-
-if you are an ai agent helping with this repository, read [`AGENTS.md`](./AGENTS.md) before making changes and read [`CONTRIBUTING.md`](./CONTRIBUTING.md) before opening issues or PRs.
-
-## development
-
-```bash
-git clone https://github.com/herdrdev/herdr
-cd herdr
-cargo build --release
-
-just test        # unit tests
-just check       # formatting, tests, and maintenance checks
-```
-
-## license
-
-Herdr is licensed under the [Apache License 2.0](LICENSE).
+Related discussion: [herdrdev/herdr#4556](https://github.com/herdrdev/herdr/discussions/4556).

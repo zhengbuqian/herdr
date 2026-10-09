@@ -948,6 +948,8 @@ pub struct UiConfig {
     pub sidebar_collapsed_mode: SidebarCollapsedModeConfig,
     /// Terminal width at or below which Herdr uses the mobile single-column layout. Default: 64.
     pub mobile_width_threshold: u16,
+    /// Detach this client after this many minutes without local user activity. Default: 0 (off).
+    pub idle_detach_minutes: u16,
     /// Capture mouse input for Herdr's mouse UI. Default: true.
     pub mouse_capture: bool,
     /// Copy text selected with the mouse. Default: true.
@@ -1201,6 +1203,7 @@ impl Default for UiConfig {
             sidebar_start_collapsed: false,
             sidebar_collapsed_mode: SidebarCollapsedModeConfig::Compact,
             mobile_width_threshold: DEFAULT_MOBILE_WIDTH_THRESHOLD,
+            idle_detach_minutes: 0,
             mouse_capture: true,
             copy_on_select: true,
             host_cursor: HostCursorModeConfig::Auto,

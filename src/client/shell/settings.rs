@@ -48,6 +48,9 @@ impl ClientShellState {
     fn selected_index_for_settings_section(&self, section: ClientSettingsSection) -> usize {
         match section {
             ClientSettingsSection::Theme => theme_index(&self.config.theme_name),
+            ClientSettingsSection::Spaces => {
+                usize::from(self.spaces_group_by == SpacesGroupBy::Name)
+            }
             ClientSettingsSection::Indicators => indicator_index(self.config.status_indicators),
             ClientSettingsSection::Sound => usize::from(!self.config.sound_enabled),
             ClientSettingsSection::Toast => toast_index(self.config.toast_delivery),
@@ -97,7 +100,9 @@ impl ClientShellState {
         match self.overlay.as_ref() {
             Some(ClientShellOverlay::Settings(settings)) => match settings.section {
                 ClientSettingsSection::Theme => crate::config::THEME_NAMES.len(),
-                ClientSettingsSection::Indicators | ClientSettingsSection::Sound => 2,
+                ClientSettingsSection::Spaces
+                | ClientSettingsSection::Indicators
+                | ClientSettingsSection::Sound => 2,
                 ClientSettingsSection::Toast => 4,
                 ClientSettingsSection::Integrations => settings.integrations.len(),
             },
@@ -194,6 +199,20 @@ impl ClientShellState {
                 };
                 if self.save_settings_edit(crate::config::ConfigEdit::Theme(name), outcome) {
                     self.overlay = None;
+                }
+            }
+            ClientSettingsSection::Spaces => {
+                let group_by = if selected == 0 {
+                    SpacesGroupBy::Machine
+                } else {
+                    SpacesGroupBy::Name
+                };
+                if self.spaces_group_by != group_by {
+                    self.spaces_group_by = group_by;
+                    self.persist_chrome_preferences(outcome);
+                    self.workspace_scroll = 0;
+                    self.reveal_focused_workspace = true;
+                    outcome.repaint = true;
                 }
             }
             ClientSettingsSection::Indicators => {

@@ -61,6 +61,9 @@ impl ClientShellState {
             collapsed_endpoints: &self.collapsed_endpoints,
             collapsed_groups: &self.collapsed_groups,
             remote_collapsed_groups: &self.remote_collapsed_groups,
+            spaces_group_by: self.spaces_group_by,
+            collapsed_projects: &self.collapsed_projects,
+            collapsed_project_machines: &self.collapsed_project_machines,
             workspace_scroll: &mut self.workspace_scroll,
             agent_scroll: &mut self.agent_scroll,
             tab_scroll: &mut self.tab_scroll,
@@ -78,7 +81,16 @@ impl ClientShellState {
             dragged_workspace_id: None,
             workspace_drop_indicator_row: None,
         };
-        if let Some(snapshot) = local_snapshot {
+        if self.spaces_group_by == SpacesGroupBy::Name {
+            super::project_sidebar::render_expanded(
+                &mut buffer,
+                sidebar,
+                self.snapshot.as_deref(),
+                &self.config,
+                &mut render_state,
+                &mut self.hits,
+            );
+        } else if let Some(snapshot) = local_snapshot {
             render::render_sidebar(
                 &mut buffer,
                 sidebar,
@@ -217,6 +229,9 @@ impl ClientShellState {
                 collapsed_endpoints: &self.collapsed_endpoints,
                 collapsed_groups: &self.collapsed_groups,
                 remote_collapsed_groups: &self.remote_collapsed_groups,
+                spaces_group_by: self.spaces_group_by,
+                collapsed_projects: &self.collapsed_projects,
+                collapsed_project_machines: &self.collapsed_project_machines,
                 workspace_scroll: &mut self.workspace_scroll,
                 agent_scroll: &mut self.agent_scroll,
                 tab_scroll: &mut self.tab_scroll,

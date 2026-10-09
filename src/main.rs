@@ -249,6 +249,10 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # Increase this for foldables, tablets, or wide phone terminals.
 # mobile_width_threshold = 64
 
+# Detach this client after this many minutes without local keyboard, mouse, focus, or resize activity.
+# Agent output does not reset the timer. Zero disables automatic detach.
+# idle_detach_minutes = 0
+
 # Capture mouse input for Herdr's mouse UI.
 # Set false to let the terminal handle normal clicks, such as Cmd-clicking URLs.
 # Pane apps like lazygit and btop can still receive mouse when they request it.

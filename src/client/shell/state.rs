@@ -84,6 +84,7 @@ pub(super) enum ClientMobileTarget {
 #[derive(Default)]
 pub(super) struct ShellHitMap {
     pub(super) machines: Vec<MachineHit>,
+    pub(super) projects: Vec<super::project_spaces::ProjectHit>,
     pub(super) workspaces: Vec<WorkspaceHit>,
     pub(super) workspace_body: Rect,
     pub(super) workspace_scrollbar: Rect,
@@ -384,6 +385,7 @@ pub(super) struct ClientGlobalMenuOverlay {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ClientSettingsSection {
     Theme,
+    Spaces,
     Indicators,
     Sound,
     Toast,
@@ -393,6 +395,7 @@ pub(super) enum ClientSettingsSection {
 impl ClientSettingsSection {
     pub(super) const ALL: &[Self] = &[
         Self::Theme,
+        Self::Spaces,
         Self::Indicators,
         Self::Sound,
         Self::Toast,
@@ -402,6 +405,7 @@ impl ClientSettingsSection {
     pub(super) fn label(self) -> &'static str {
         match self {
             Self::Theme => "theme",
+            Self::Spaces => "spaces",
             Self::Indicators => "indicators",
             Self::Sound => "sound",
             Self::Toast => "toasts",
@@ -869,9 +873,13 @@ pub(crate) struct ClientShellState {
     pub(super) tab_press: Option<ClientTabPress>,
     pub(super) collapsed_groups: HashSet<String>,
     pub(super) remote_collapsed_groups: HashMap<ClientEndpointId, HashSet<String>>,
+    pub(super) spaces_group_by: SpacesGroupBy,
+    pub(super) collapsed_projects: HashSet<String>,
+    pub(super) collapsed_project_machines: HashSet<(String, ClientEndpointId)>,
     pub(super) workspace_scroll: usize,
     pub(super) agent_scroll: usize,
     pub(super) pending_agent_reveal: Option<(ClientEndpointId, String)>,
+    pub(super) pending_workspace_context_menu: Option<(WorkspaceNavigationTarget, u16, u16)>,
     pub(super) tab_scroll: usize,
     pub(super) mobile_switcher_scroll: usize,
     pub(super) reveal_focused_workspace: bool,
@@ -963,7 +971,7 @@ pub(super) fn release_notes_state(
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct WorkspaceEntry {
     pub(super) index: usize,
     pub(super) indented: bool,
@@ -1007,6 +1015,21 @@ impl ClientShellState {
                 .or_default()
                 .extend(saved.collapsed_groups);
         }
+        let collapsed_project_machines = preferences
+            .collapsed_project_machines
+            .iter()
+            .filter_map(|saved| {
+                let endpoint_id = if saved.endpoint_id == "local" {
+                    ClientEndpointId::Local
+                } else {
+                    ClientEndpointId::Ssh(
+                        crate::client::endpoint::ProfileId::parse(saved.endpoint_id.clone())
+                            .ok()?,
+                    )
+                };
+                Some((saved.project_key.clone(), endpoint_id))
+            })
+            .collect();
         Self {
             machine_diagnostics: Default::default(),
             config,
@@ -1034,9 +1057,13 @@ impl ClientShellState {
             tab_press: None,
             collapsed_groups: preferences.collapsed_groups.into_iter().collect(),
             remote_collapsed_groups,
+            spaces_group_by: preferences.spaces_group_by,
+            collapsed_projects: preferences.collapsed_projects.into_iter().collect(),
+            collapsed_project_machines,
             workspace_scroll: 0,
             agent_scroll: 0,
             pending_agent_reveal: None,
+            pending_workspace_context_menu: None,
             tab_scroll: 0,
             mobile_switcher_scroll: 0,
             reveal_focused_workspace: true,

@@ -306,6 +306,9 @@ impl ClientShellState {
         key: crate::input::TerminalKey,
         outcome: &mut ClientShellInput,
     ) {
+        if key.kind == KeyEventKind::Press {
+            self.pending_workspace_context_menu = None;
+        }
         outcome.repaint |= self.clear_link_hover();
         if self.copy_operation_in_flight {
             self.copy_input_queue.push_back(key);

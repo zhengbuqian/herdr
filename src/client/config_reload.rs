@@ -6,6 +6,7 @@ pub(super) fn init_logging() {
 
 pub(super) fn apply_reload(
     state: &mut ClientState,
+    idle_detach: &mut timer::IdleDetach,
     endpoints: &mut endpoint::EndpointRegistry,
     pending_activation: &mut Option<endpoint::PendingEndpointActivation>,
     host_mouse_capture_active: &std::sync::atomic::AtomicBool,
@@ -20,6 +21,7 @@ pub(super) fn apply_reload(
         &mut state.draw_host_cursor,
         &mut state.remote_image_paste_key,
         &mut mouse_capture,
+        idle_detach,
     );
     state.shell_mouse_capture_preference = mouse_capture;
     state.direct_mouse_capture_preference = state.attach_escape.is_some() && mouse_capture;
@@ -98,6 +100,7 @@ pub(super) fn reload_local_client_config(
         crossterm::event::KeyModifiers,
     )>,
     mouse_capture: &mut bool,
+    idle_detach: &mut timer::IdleDetach,
 ) {
     match crate::config::load_live_config() {
         Ok(loaded) => {
@@ -116,6 +119,10 @@ pub(super) fn reload_local_client_config(
                 *redraw_on_focus_gained = loaded.config.ui.redraw_on_focus_gained;
                 *draw_host_cursor = should_draw_host_cursor(loaded.config.ui.host_cursor);
                 *mouse_capture = loaded.config.ui.mouse_capture;
+                idle_detach.configure(
+                    loaded.config.ui.idle_detach_minutes,
+                    std::time::Instant::now(),
+                );
             }
             if !invalid_section("keys") {
                 *remote_image_paste_key = client_remote_image_paste_key(&loaded.config);

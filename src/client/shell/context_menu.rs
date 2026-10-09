@@ -80,6 +80,31 @@ impl ClientContextMenuOverlay {
 }
 
 impl ClientShellState {
+    pub(super) fn request_workspace_context_menu(
+        &mut self,
+        endpoint_id: ClientEndpointId,
+        workspace_id: String,
+        x: u16,
+        y: u16,
+        outcome: &mut ClientShellInput,
+    ) {
+        if endpoint_id == self.active_endpoint_id {
+            self.open_workspace_context_menu(workspace_id, x, y);
+            outcome.repaint = true;
+            return;
+        }
+        let Some(target) = self.navigation_target(&endpoint_id, &workspace_id) else {
+            return;
+        };
+        if self.focus_or_activate(
+            endpoint_id,
+            ClientEndpointFocusTarget::Workspace(workspace_id),
+            outcome,
+        ) {
+            self.pending_workspace_context_menu = Some((target, x, y));
+        }
+    }
+
     pub(super) fn open_workspace_context_menu(&mut self, workspace_id: String, x: u16, y: u16) {
         let Some(snapshot) = self.snapshot.as_deref() else {
             return;

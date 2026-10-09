@@ -29,6 +29,7 @@ pub(super) struct MachineHit {
     pub(super) status_badge: Rect,
     pub(super) collapse_toggle: Rect,
     pub(super) endpoint_id: ClientEndpointId,
+    pub(super) project_key: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -241,6 +242,11 @@ impl ClientShellState {
         }
         if let Some((_, pane_id)) = pending_agent_reveal {
             self.reveal_endpoint_agent(endpoint_id, &pane_id, agent_body_height);
+        }
+        if let Some((target, x, y)) = self.pending_workspace_context_menu.take() {
+            if &target.endpoint_id == endpoint_id && self.navigation_target_valid(&target) {
+                self.open_workspace_context_menu(target.workspace_id, x, y);
+            }
         }
         true
     }

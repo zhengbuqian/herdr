@@ -509,7 +509,8 @@ impl ClientShellState {
     }
 
     fn workspace_drop_target_at(&self, point: (u16, u16)) -> Option<(Option<String>, u16)> {
-        if self.hits.workspace_body.height == 0
+        if self.spaces_group_by == SpacesGroupBy::Name
+            || self.hits.workspace_body.height == 0
             || point.1 < self.hits.workspace_body.y.saturating_sub(1)
             || point.1 >= self.hits.new_workspace.y
             || self.hits.workspaces.iter().any(|hit| {
@@ -652,6 +653,9 @@ impl ClientShellState {
     }
 
     pub(super) fn handle_mouse(&mut self, mouse: MouseEvent, outcome: &mut ClientShellInput) {
+        if matches!(mouse.kind, MouseEventKind::Down(_)) {
+            self.pending_workspace_context_menu = None;
+        }
         self.update_link_hover(mouse, outcome);
         let point = (mouse.column, mouse.row);
         if self.mode == ClientShellMode::Navigate
@@ -1805,12 +1809,27 @@ impl ClientShellState {
                 if !self.config.mouse_capture {
                     return;
                 }
-                let workspace_id = (!self.sidebar_collapsed)
-                    .then(|| self.active_endpoint_workspace_at(point))
+                let workspace = (!self.sidebar_collapsed)
+                    .then(|| {
+                        self.active_endpoint_workspace_at(point)
+                            .map(|workspace_id| (self.active_endpoint_id.clone(), workspace_id))
+                            .or_else(|| {
+                                self.hits
+                                    .workspaces
+                                    .iter()
+                                    .find(|hit| super::contains(hit.rect, point))
+                                    .map(|hit| (hit.endpoint_id.clone(), hit.workspace_id.clone()))
+                            })
+                    })
                     .flatten();
-                if let Some(workspace_id) = workspace_id {
-                    self.open_workspace_context_menu(workspace_id, mouse.column, mouse.row);
-                    outcome.repaint = true;
+                if let Some((endpoint_id, workspace_id)) = workspace {
+                    self.request_workspace_context_menu(
+                        endpoint_id,
+                        workspace_id,
+                        mouse.column,
+                        mouse.row,
+                        outcome,
+                    );
                     return;
                 }
                 let tab_id = self
@@ -2000,7 +2019,9 @@ impl ClientShellState {
                     outcome.repaint = true;
                     return;
                 }
-                if self.handle_endpoint_machine_click(point, outcome) {
+                if self.handle_project_header_click(point, outcome)
+                    || self.handle_endpoint_machine_click(point, outcome)
+                {
                     return;
                 }
                 if super::contains(self.hits.global_launcher, point) {
@@ -2064,7 +2085,14 @@ impl ClientShellState {
                     super::contains(*rect, point).then(|| (hit.endpoint_id.clone(), key.clone()))
                 });
                 if let Some((endpoint_id, key)) = group_toggle {
-                    self.toggle_collapsed_group(&endpoint_id, key);
+                    if key == super::project_spaces::HOME_GROUP_KEY {
+                        let target = (key, endpoint_id);
+                        if !self.collapsed_project_machines.remove(&target) {
+                            self.collapsed_project_machines.insert(target);
+                        }
+                    } else {
+                        self.toggle_collapsed_group(&endpoint_id, key);
+                    }
                     outcome.repaint = true;
                     self.persist_chrome_preferences(outcome);
                     return;

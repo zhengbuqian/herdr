@@ -7,6 +7,14 @@ static NEXT_TEMP_FILE: AtomicU64 = AtomicU64::new(1);
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum SpacesGroupBy {
+    #[default]
+    Machine,
+    Name,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(super) struct ClientRemoteCollapsedGroups {
     pub(super) profile_id: String,
@@ -14,8 +22,16 @@ pub(super) struct ClientRemoteCollapsedGroups {
     pub(super) collapsed_groups: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub(super) struct ClientProjectMachineCollapse {
+    pub(super) project_key: String,
+    pub(super) endpoint_id: String,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub(super) struct ClientChromePreferences {
+    #[serde(default, skip_serializing_if = "is_machine_grouping")]
+    pub(super) spaces_group_by: SpacesGroupBy,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) sidebar_width: Option<u16>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -28,6 +44,14 @@ pub(super) struct ClientChromePreferences {
     pub(super) collapsed_groups: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub(super) remote_collapsed_groups: Vec<ClientRemoteCollapsedGroups>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(super) collapsed_projects: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(super) collapsed_project_machines: Vec<ClientProjectMachineCollapse>,
+}
+
+fn is_machine_grouping(value: &SpacesGroupBy) -> bool {
+    *value == SpacesGroupBy::Machine
 }
 
 pub(super) fn path_for_local_endpoint(socket_path: &Path) -> PathBuf {
@@ -140,12 +164,24 @@ mod tests {
         store(
             &path,
             ClientChromePreferences {
+                spaces_group_by: SpacesGroupBy::Name,
                 sidebar_width: Some(32),
+                collapsed_projects: vec!["milvus".into()],
+                collapsed_project_machines: vec![ClientProjectMachineCollapse {
+                    project_key: "tantivy".into(),
+                    endpoint_id: "local".into(),
+                }],
                 ..ClientChromePreferences::default()
             },
         )
         .expect("replacement preference store");
-        assert_eq!(load(&path).and_then(|saved| saved.sidebar_width), Some(32));
+        let saved = load(&path).expect("replacement preferences");
+        assert_eq!(saved.sidebar_width, Some(32));
+        assert_eq!(saved.spaces_group_by, SpacesGroupBy::Name);
+        assert_eq!(saved.collapsed_projects, ["milvus"]);
+        assert_eq!(saved.collapsed_project_machines.len(), 1);
+        assert_eq!(saved.collapsed_project_machines[0].project_key, "tantivy");
+        assert_eq!(saved.collapsed_project_machines[0].endpoint_id, "local");
         std::fs::remove_file(path).expect("remove preferences");
     }
 }

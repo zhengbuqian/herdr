@@ -12,7 +12,8 @@ impl ClientShellState {
     }
 
     pub(super) fn endpoint_workspace_is_draggable(&self, press: &ClientWorkspacePress) -> bool {
-        press.endpoint_id == self.active_endpoint_id
+        self.spaces_group_by != SpacesGroupBy::Name
+            && press.endpoint_id == self.active_endpoint_id
             && self
                 .snapshot
                 .as_deref()
@@ -56,6 +57,23 @@ impl ClientShellState {
             return false;
         };
         let endpoint_id = hit.endpoint_id.clone();
+        let project_key = hit.project_key.clone().or_else(|| {
+            (self.spaces_group_by == SpacesGroupBy::Name)
+                .then(|| super::project_spaces::MACHINE_PROJECT_KEY.to_owned())
+        });
+        if let Some(project_key) = project_key {
+            if super::contains(hit.collapse_toggle, point) {
+                let key = (project_key, endpoint_id);
+                if !self.collapsed_project_machines.remove(&key) {
+                    self.collapsed_project_machines.insert(key);
+                }
+                self.persist_chrome_preferences(outcome);
+                outcome.repaint = true;
+            } else {
+                self.activate_endpoint(endpoint_id, outcome);
+            }
+            return true;
+        }
         let collapse_toggle = super::contains(hit.collapse_toggle, point);
         if collapse_toggle || endpoint_id == self.active_endpoint_id {
             if !self.collapsed_endpoints.remove(&endpoint_id) {
@@ -75,6 +93,28 @@ impl ClientShellState {
             self.receive_endpoint_unavailable(format!("{label} is not ready"));
             outcome.repaint = true;
         }
+        true
+    }
+
+    pub(super) fn handle_project_header_click(
+        &mut self,
+        point: (u16, u16),
+        outcome: &mut ClientShellInput,
+    ) -> bool {
+        let Some(key) = self
+            .hits
+            .projects
+            .iter()
+            .find(|hit| super::contains(hit.rect, point))
+            .map(|hit| hit.key.clone())
+        else {
+            return false;
+        };
+        if !self.collapsed_projects.remove(&key) {
+            self.collapsed_projects.insert(key);
+        }
+        self.persist_chrome_preferences(outcome);
+        outcome.repaint = true;
         true
     }
 
@@ -106,36 +146,54 @@ impl ClientShellState {
         outcome: &mut ClientShellInput,
     ) -> bool {
         use crate::input::KeybindAction;
-        if !self.multi_endpoint_active() {
+        if !self.multi_endpoint_active() && self.spaces_group_by != SpacesGroupBy::Name {
             return false;
         }
         if matches!(
             action,
             KeybindAction::PreviousWorkspace | KeybindAction::NextWorkspace
         ) {
-            let workspaces = self
-                .endpoints
-                .iter()
-                .filter(|endpoint| endpoint.status == ClientEndpointStatus::Online)
-                .flat_map(|endpoint| {
-                    endpoint
-                        .snapshot
-                        .as_deref()
-                        .map_or_else(Vec::new, |snapshot| {
-                            render::workspace_entries(snapshot, &HashSet::new())
-                                .into_iter()
-                                .filter_map(|entry| {
-                                    snapshot.workspaces.get(entry.index).map(|workspace| {
-                                        (
-                                            endpoint.endpoint_id.clone(),
-                                            workspace.workspace_id.clone(),
-                                        )
+            let workspaces = if self.spaces_group_by == SpacesGroupBy::Name {
+                let rows =
+                    super::project_spaces::rows(&self.endpoints, &HashSet::new(), &HashSet::new());
+                super::project_spaces::workspace_order(&rows)
+                    .into_iter()
+                    .filter_map(|(endpoint_index, index)| {
+                        let endpoint = &self.endpoints[endpoint_index];
+                        (endpoint.status == ClientEndpointStatus::Online)
+                            .then_some(endpoint.snapshot.as_deref())
+                            .flatten()?
+                            .workspaces
+                            .get(index)
+                            .map(|workspace| {
+                                (endpoint.endpoint_id.clone(), workspace.workspace_id.clone())
+                            })
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                self.endpoints
+                    .iter()
+                    .filter(|endpoint| endpoint.status == ClientEndpointStatus::Online)
+                    .flat_map(|endpoint| {
+                        endpoint
+                            .snapshot
+                            .as_deref()
+                            .map_or_else(Vec::new, |snapshot| {
+                                render::workspace_entries(snapshot, &HashSet::new())
+                                    .into_iter()
+                                    .filter_map(|entry| {
+                                        snapshot.workspaces.get(entry.index).map(|workspace| {
+                                            (
+                                                endpoint.endpoint_id.clone(),
+                                                workspace.workspace_id.clone(),
+                                            )
+                                        })
                                     })
-                                })
-                                .collect()
-                        })
-                })
-                .collect::<Vec<_>>();
+                                    .collect()
+                            })
+                    })
+                    .collect::<Vec<_>>()
+            };
             if workspaces.is_empty() {
                 return true;
             }
@@ -256,6 +314,12 @@ impl ClientShellState {
         target: ClientEndpointFocusTarget,
         outcome: &mut ClientShellInput,
     ) -> bool {
+        self.pending_workspace_context_menu = None;
+        if let ClientEndpointFocusTarget::Workspace(workspace_id) = &target {
+            if self.spaces_group_by == SpacesGroupBy::Name {
+                self.expand_project_workspace(&endpoint_id, workspace_id);
+            }
+        }
         self.pending_workspace_highlight = None;
         self.pending_agent_reveal = None;
         let online = self.endpoint_is_online(&endpoint_id);
@@ -293,5 +357,57 @@ impl ClientShellState {
             });
         }
         true
+    }
+
+    pub(super) fn expand_project_workspace(
+        &mut self,
+        endpoint_id: &ClientEndpointId,
+        workspace_id: &str,
+    ) {
+        self.collapsed_endpoints.remove(endpoint_id);
+        self.collapsed_project_machines.remove(&(
+            super::project_spaces::MACHINE_PROJECT_KEY.to_owned(),
+            endpoint_id.clone(),
+        ));
+        let project = self
+            .endpoints
+            .iter()
+            .find(|endpoint| &endpoint.endpoint_id == endpoint_id)
+            .and_then(|endpoint| {
+                super::project_spaces::endpoint_workspace_project_name(endpoint, workspace_id)
+            })
+            .map(str::to_owned);
+        if let Some(project) = project {
+            if project == "~" {
+                self.collapsed_project_machines.remove(&(
+                    super::project_spaces::HOME_GROUP_KEY.to_owned(),
+                    endpoint_id.clone(),
+                ));
+            }
+            self.collapsed_projects.remove(&project);
+            self.collapsed_project_machines
+                .remove(&(project, endpoint_id.clone()));
+        }
+        let group = self
+            .endpoints
+            .iter()
+            .find(|endpoint| &endpoint.endpoint_id == endpoint_id)
+            .and_then(|endpoint| endpoint.snapshot.as_deref())
+            .and_then(|snapshot| {
+                snapshot
+                    .workspaces
+                    .iter()
+                    .find(|workspace| workspace.workspace_id == workspace_id)
+            })
+            .and_then(|workspace| workspace.worktree.as_ref())
+            .map(|tree| tree.key.clone());
+        if let Some(group) = group {
+            if endpoint_id.is_local() {
+                self.collapsed_groups.remove(&group);
+            } else if let Some(groups) = self.remote_collapsed_groups.get_mut(endpoint_id) {
+                groups.remove(&group);
+            }
+        }
+        self.reveal_focused_workspace = true;
     }
 }
